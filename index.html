@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Matching Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #game-container {
+            max-width: 800px;
+            width: 100%;
+            margin: 20px auto;
+            text-align: center;
+        }
+        .card {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 18px;
+        }
+        .matched {
+            background-color: lightgreen;
+            cursor: not-allowed;
+        }
+        #controls {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Card Matching Game</h1>
+        <h2>Dealer's Open Cards</h2>
+        <div id="dealer-open"></div>
+        <h2>Your Cards</h2>
+        <div id="player-hand"></div>
+        <h2>AI Player 1's Matches: <span id="ai1-matches">0</span></h2>
+        <h2>AI Player 2's Matches: <span id="ai2-matches">0</span></h2>
+        <div id="controls">
+            <button id="restart-button">Restart</button>
+        </div>
+        <h2>Your Matches: <span id="player-matches">0</span></h2>
+    </div>
+    <script>
+        const dealerOpen = [];
+        const playerHand = [];
+        const ai1Hand = [];
+        const ai2Hand = [];
+        let dealerDeck = [];
+        let playerMatches = 0;
+        let ai1Matches = 0;
+        let ai2Matches = 0;
+        let gameActive = true;
+        let currentPlayer = 0; // 0: Player, 1: AI1, 2: AI2
+
+        const dealerOpenDiv = document.getElementById("dealer-open");
+        const playerHandDiv = document.getElementById("player-hand");
+        const playerMatchesSpan = document.getElementById("player-matches");
+        const ai1MatchesSpan = document.getElementById("ai1-matches");
+        const ai2MatchesSpan = document.getElementById("ai2-matches");
+        const restartButton = document.getElementById("restart-button");
+
+        function initializeGame() {
+            dealerOpen.length = 0;
+            playerHand.length = 0;
+            ai1Hand.length = 0;
+            ai2Hand.length = 0;
+            playerMatches = 0;
+            ai1Matches = 0;
+            ai2Matches = 0;
+            gameActive = true;
+            currentPlayer = 0;
+            const deck = Array.from({ length: 12 }, (_, i) => i + 1).flatMap((x) => [x, x, x, x]);
+            dealerDeck = shuffle(deck);
+            playerHand.push(...dealerDeck.splice(0, 6));
+            ai1Hand.push(...dealerDeck.splice(0, 6));
+            ai2Hand.push(...dealerDeck.splice(0, 6));
+            dealerOpen.push(...dealerDeck.splice(0, 6));
+            updateUI();
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function updateUI() {
+            dealerOpenDiv.innerHTML = "";
+            playerHandDiv.innerHTML = "";
+
+            dealerOpen.forEach((card) => {
+                const cardDiv = document.createElement("div");
+                cardDiv.classList.add("card");
+                cardDiv.textContent = card;
+                dealerOpenDiv.appendChild(cardDiv);
+            });
+
+            playerHand.forEach((card, index) => {
+                const cardDiv = document.createElement("div");
+                cardDiv.classList.add("card");
+                cardDiv.textContent = card;
+                cardDiv.onclick = () => {
+                    if (currentPlayer === 0) playCard(index);
+                };
+                playerHandDiv.appendChild(cardDiv);
+            });
+
+            playerMatchesSpan.textContent = playerMatches;
+            ai1MatchesSpan.textContent = ai1Matches;
+            ai2MatchesSpan.textContent = ai2Matches;
+
+            if (playerHand.length === 0 && ai1Hand.length === 0 && ai2Hand.length === 0 && dealerDeck.length === 0 && dealerOpen.length === 0) {
+                endGame();
+            } else {
+                if (playerHand.length === 0 && dealerDeck.length > 0) drawCard(playerHand);
+                if (ai1Hand.length === 0 && dealerDeck.length > 0) drawCard(ai1Hand);
+                if (ai2Hand.length === 0 && dealerDeck.length > 0) drawCard(ai2Hand);
+
+                if (dealerOpen.length === 0 && dealerDeck.length > 0) refillDealerOpen();
+            }
+        }
+
+        function playCard(index) {
+            const card = playerHand[index];
+            playerHand.splice(index, 1);
+            resolveTurn(card, "player");
+            nextTurn();
+        }
+
+        function aiPlay(hand, aiName) {
+            if (hand.length > 0) {
+                let card;
+
+                const matchableCards = hand.filter((card) => dealerOpen.includes(card));
+                if (matchableCards.length > 0) {
+                    card = matchableCards[0];
+                    hand.splice(hand.indexOf(card), 1);
+                } else {
+                    card = hand.pop();
+                }
+
+                resolveTurn(card, aiName);
+                nextTurn();
+            }
+        }
+
+        function resolveTurn(card, player) {
+            const matchIndex = dealerOpen.indexOf(card);
+            if (matchIndex !== -1) {
+                dealerOpen.splice(matchIndex, 1);
+                if (player === "player") playerMatches++;
+                else if (player === "ai1") ai1Matches++;
+                else if (player === "ai2") ai2Matches++;
+                alert(`${player.toUpperCase()} matched card ${card}!`);
+            } else {
+                dealerOpen.push(card);
+            }
+            updateUI();
+        }
+
+        function nextTurn() {
+            currentPlayer = (currentPlayer + 1) % 3;
+            if (currentPlayer === 1) aiPlay(ai1Hand, "ai1");
+            else if (currentPlayer === 2) aiPlay(ai2Hand, "ai2");
+            else dealerAction();
+        }
+
+        function dealerAction() {
+            if (dealerDeck.length) {
+                const card = dealerDeck.pop();
+                const matchIndex = dealerOpen.indexOf(card);
+                if (matchIndex !== -1) {
+                    dealerOpen.splice(matchIndex, 1);
+                } else {
+                    dealerOpen.push(card);
+                }
+                updateUI();
+            }
+        }
+
+        function drawCard(hand) {
+            if (dealerDeck.length) {
+                hand.push(dealerDeck.pop());
+                updateUI();
+            }
+        }
+
+        function refillDealerOpen() {
+            if (dealerDeck.length) {
+                dealerOpen.push(...dealerDeck.splice(0, Math.min(6, dealerDeck.length)));
+            }
+        }
+
+        function endGame() {
+            gameActive = false;
+            const maxMatches = Math.max(playerMatches, ai1Matches, ai2Matches);
+            if (playerMatches === maxMatches) {
+                alert("Victory! 🎉 You have the most matches!");
+            } else {
+                alert("Lose 😞 The AI won with the most matches.");
+            }
+            alert(`Final Scores:\nYou: ${playerMatches}\nAI 1: ${ai1Matches}\nAI 2: ${ai2Matches}`);
+        }
+
+        restartButton.onclick = () => {
+            alert("Game Restarted!");
+            initializeGame();
+        };
+
+        initializeGame();
+    </script>
+</body>
+</html>
+
